@@ -26,7 +26,6 @@ class whiteboard_wipping(gym.core.Env):
         self.vis = vis
         if self.vis:
             self.p_bar = tqdm(ncols=0, disable=False)
-        
         self.camera = camera
 
         #define env
@@ -113,7 +112,7 @@ class whiteboard_wipping(gym.core.Env):
         self.uptown_funk()
         self.update_visited(xyz)
         reward = self.update_reward(previous_visited, self.visited_map)
-        done = True if reward == 1 else False
+        done = True if reward == 1 else False 
         obs = self.get_observation()
         info = {"episode": 1}
         return obs, reward, done, info
@@ -190,4 +189,27 @@ def make_wipping_env():
                     0.1, 5, (320, 320), 40)
 
     robot = UR((0.5, 0.1, 0), (0, 0, 0))
-    return whiteboard_wipping(robot, camera, vis = True)
+    return whiteboard_wipping(robot, camera, vis = False)
+
+class whiteboard_wipping_diff(whiteboard_wipping):
+    def __init__(self, robot, camera=None, vis=False):
+        # action space: r, p, y
+        self.action_space = spaces.Box(-1 ,1, shape = (4,), dtype = 'float32')
+
+    def step(self, base_action, diff_action, control_method = "end"):
+        
+        previous_visited = self.visited_map.copy()
+
+        action = np.append(base_action, diff_action)
+        self.robot.move_ee(action, control_method)
+        xyz, _ = p.getBasePositionAndOrientation(self.robot.id)
+        self.uptown_funk()
+        self.update_visited(xyz)
+        reward = self.update_reward(previous_visited, self.visited_map)
+        done = True if reward == 1 else False 
+        obs = self.get_observation()
+        info = {"episode": 1}
+        return obs, reward, done, info
+
+    def update_reward(self, previous_visited, current_visited):
+        pass
