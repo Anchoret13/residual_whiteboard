@@ -23,16 +23,17 @@ import numpy as np
 import gym
 from gym import spaces
 
+
 class PNP_env(gym.core.Env):
     SIMULATION_STEP_DELAY = 1 / 30 # image 
 
-    def __init__(self, robot, camera_1, camera_2, ycb_name, ycb_pos, ycb_ori, vis) -> None:
+    def __init__(self, robot, camera, ycb_name, ycb_pos, ycb_ori, vis) -> None:
         self.robot = robot
         self.vis = vis
         if self.vis:
             self.p_bar = tqdm(ncols=0, disable=False)
-        self.camera_1 = camera_1
-        self.camera_2 = camera_2
+        self.camera = camera
+        # self.camera_2 = camera_2
 
         #define env
         self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
@@ -43,8 +44,6 @@ class PNP_env(gym.core.Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-
-        self.base_obs = [] # TO BE UPDATE
 
 
         # ROBOT POSITION
@@ -57,10 +56,9 @@ class PNP_env(gym.core.Env):
         self.gripper_opening_length_control = 0.04
 
         self.object_grasped = False
-
         
         # state space
-        self.base_obs = []
+        self.base_obs = [] # TO BE UPDATE
         self.goal_dim = 3 # TODO: update state dim
         self.state_dim = len(self.base_obs)
         self.obs_low = np.array([-1] * self.state_dim)
@@ -100,7 +98,7 @@ class PNP_env(gym.core.Env):
             time.sleep(self.SIMULATION_STEP_DELAY)
             self.p_bar.update(1)
 
-    def uptown_funk(self, time = 120):
+    def uptown_funk(self, time = 0.5):
         # STOP! WAIT A MINUTE
         steps = int(time/self.integration_step)
         for _ in range(steps):  
@@ -134,22 +132,26 @@ class PNP_env(gym.core.Env):
         move: (x, y, z, r, p, y, open_length)
         """
         assert control_method in ('end', 'joint')
-        grip = (action[7]+1)/2*0.085 # normalization
+        grip = (action[6]+1)/2*0.085 # normalization
         base_pos, _ = p.getBasePositionAndOrientation(self.robot.id)
         absolute_pos = action[:6]
         absolute_pos[:3] += np.array(base_pos)
-        absolute_pos[3:6] = (absolute_pos[3:6] + 1/2)*np.pi
-
+        # absolute_pos[3:6] = (absolute_pos[3:6] + 1/2)*np.pi
+        absolute_pos[3] = (absolute_pos[3] + 1/2)*np.pi
+        absolute_pos[4] = (absolute_pos[4] + 1/2)*np.pi
+        absolute_pos[5] = (absolute_pos[5] + 1/2)*np.pi
 
         # self.robot.move_ee(absolute_pos, control_method)
-        self.robot.move_ee(action, control_method)
+        self.robot.move_ee(absolute_pos, control_method)
+        self.robot.move_gripper(action[-1])
         delta_t = 0.2
         
         ## PICK
 
         ## PLACE
 
-        state = self.get_state()
+        # state = self.get_state()
+        state = self.get_observation()
         reward = self.update_reward()
         done = True if reward == 0 else False
         info = {"is_success": done}
@@ -160,8 +162,8 @@ class PNP_env(gym.core.Env):
 
     def get_observation(self):
         obs = dict()
-        if isinstance(self.camera_1, Camera):
-            rgb, depth, seg = self.camera_1.shot()
+        if isinstance(self.camera, Camera):
+            rgb, depth, seg = self.camera.shot()
             obs.update(dict(rgb=rgb, depth=depth, seg=seg))
         else:
             assert self.camera is None
@@ -174,16 +176,23 @@ class PNP_env(gym.core.Env):
         return pos, ori
     
     def get_robot_obs(self):
+        # joint position: 12
+        # joint velocity: 12
+        # ee position: 3
         return(self.robot.get_joint_obs())
     
     def sample_goal(self):
         pass
 
+    def reset_env(self):
+        p.resetBasePositionAndOrientation(self.ycb, self.ycb_pos, self.ycb_ori)
+        self.robot.move_ee((0, 0, 0.5, 1.570796251296997, 1.570796251296997, 1.570796251296997),'end')
+
     def reset(self):
         self.goal = self.sample_goal()
         self.goal_vis = 0 # VISUALIZE WITH A NON-COLLISION GOAL
         self.robot.reset()
-        # self.reset_env()
+        self.reset_env()
         self.object_grasped = False
         state = self.get_observation()
         return state
@@ -206,9 +215,5 @@ def make_PNP():
      ycb_pos = [0, -0.5, 0.1]
      ycb_ori = p.getQuaternionFromEuler([0, np.pi/2, np.pi/2])
      
-     env = PNP_env(robot, camera_1, camera_2, ycb, ycb_pos, ycb_ori,vis = True)
-     env.uptown_funk(2400)
+     env = PNP_env(robot, camera=camera_1, ycb_name= ycb, ycb_pos = ycb_pos, ycb_ori = ycb_ori,vis = True)
      return env
-
-env = make_PNP()
-env.step()

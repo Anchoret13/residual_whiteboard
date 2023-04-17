@@ -95,14 +95,14 @@ class RobotBase(object):
         for _ in range(10):
             self.step_simulation()
 
-    # def reset_gripper(self):
-    #     self.open_gripper()
+    def reset_gripper(self):
+        self.open_gripper()
 
-    # def open_gripper(self):
-    #     self.move_gripper(self.gripper_range[1])
+    def open_gripper(self):
+        self.move_gripper(self.gripper_range[1])
 
-    # def close_gripper(self):
-    #     self.move_gripper(self.gripper_range[0])
+    def close_gripper(self):
+        self.move_gripper(self.gripper_range[0])
 
     def move_ee(self, action, control_method):
         assert control_method in ('joint', 'end')

@@ -32,7 +32,9 @@ def make_whiteboard():
 
 from pnp_env import make_PNP
 
-env = make_PNP
-action = [0.7, -0.5, 0.9, 1.570796251296997, 1.570796251296997, 1.570796251296997, 0.1]
-# env.step(action, control_method = "end")
-env.robot.move_ee(action, 'end')
+env = make_PNP()
+action = [0, -0, 0.1, 0, 0, 0, 0.1]
+state, reward, done, info = env.step([-0.0, -0.0, 0.9, 0.0, 0.0, 0.0, 0.1])
+state, reward, done, info = env.step([-0.0, -0.0, 0.5, 0.0, 0.0, 0.0, 0.1])
+env.uptown_funk(10)
+# env.robot.move_ee(action, 'end')

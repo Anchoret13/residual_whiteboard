@@ -1,0 +1,13 @@
+observation: 
+    robot position (12)
+    robot velocity (12)
+    ee position (3)
+    
+
+achieved goal:
+    (3)
+desired goal:
+    (3)
+
+action:
+[x, y, z, r, p, y, open_length]
