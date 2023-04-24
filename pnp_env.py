@@ -63,16 +63,24 @@ class PNP_env(gym.core.Env):
         self.state_dim = len(self.base_obs)
         self.obs_low = np.array([-1] * self.state_dim)
         self.obs_high = np.array([1] * self.state_dim)
-        self.observation_space = spaces.Dict(dict([
-            # TODO: desired goal, achieved goal, observation
-        ]))
+
+        # vision-based method
+        # self.observation_space = spaces.Dict(dict(
+        #     rgb=spaces.Box(low=0, high=255, shape=(320, 320, 4), dtype=np.uint8),
+        #     depth=spaces.Box(low=0, high=1, shape=(320, 320), dtype=np.float32),
+        #     seg=spaces.Box(low=-1, high=10, shape=(320, 320), dtype=np.int32)
+        # ))
+
+        self.observation_space = spaces.Dict(dict(
+            desired_goal    =spaces.Box(0, 1, shape= (self.goal_dim,), dtype='float32'),
+            achieved_goal   =spaces.Box(0, 1, shape= (self.goal_dim,), dtype='float32'),
+            observation     =spaces.Box(0, 1, shape= (self.state_dim + 1,), dtype='float32'),
+        ))
 
         self.action_space = spaces.Box(-1, 1, shape = (7,),dtype = 'float32')
 
-        # INIT YCB
-        # self.ycb_name = ycb_name
         self.ycb_name = 'YcbHammer'
-        # ycb_name: {'YcbBanana', 'YcbChipsCan', 'GelatinBox', 'YcbHammer', 'YcbTennisBall'}
+        # ycb_name: ['YcbBanana', 'YcbChipsCan', 'GelatinBox', 'YcbHammer', 'YcbTennisBall']
         self.path_to_urdf = os.path.join(ycb_objects.getDataPath(), self.ycb_name, "model.urdf")
         
         self.ycb_pos = ycb_pos
@@ -92,6 +100,15 @@ class PNP_env(gym.core.Env):
 
         self.reset()
 
+    def gripper_contact_with_object(self, gripper_link_names, object_id):
+        gripper_link_indices = [self.robot.get_link_index_by_name(link_name) for link_name in gripper_link_names]
+        for link_index in gripper_link_indices:
+            contact_points = p.getContactPoints(self.robot.id, object_id, link_index)
+            if len(contact_points) > 0:
+                return True
+
+        return False
+
     def step_simulation(self):
         p.stepSimulation()
         if self.vis:
@@ -109,7 +126,8 @@ class PNP_env(gym.core.Env):
         return d < self.distance_threshold
 
     def grasping_success(self):
-        pass
+        eef_id = 7
+        # gripper_closed = self.robot.
 
     def drop_penalty(self):
         pass
@@ -127,23 +145,11 @@ class PNP_env(gym.core.Env):
         assert goal_a.shape == goal_b.shape
         return np.linalg.norm(goal_a - goal_b, axis=-1)
 
-    def step(self, action, control_method = "end"):
+    def step(self, action):
         """
         move: (x, y, z, r, p, y, open_length)
         """
-        assert control_method in ('end', 'joint')
-        grip = (action[6]+1)/2*0.085 # normalization
-        base_pos, _ = p.getBasePositionAndOrientation(self.robot.id)
-        absolute_pos = action[:6]
-        absolute_pos[:3] += np.array(base_pos)
-        # absolute_pos[3:6] = (absolute_pos[3:6] + 1/2)*np.pi
-        absolute_pos[3] = (absolute_pos[3] + 1/2)*np.pi
-        absolute_pos[4] = (absolute_pos[4] + 1/2)*np.pi
-        absolute_pos[5] = (absolute_pos[5] + 1/2)*np.pi
-
-        # self.robot.move_ee(absolute_pos, control_method)
-        self.robot.move_ee(absolute_pos, control_method)
-        self.robot.move_gripper(action[-1])
+        self.act(action, control_method= "end")
         delta_t = 0.2
         
         ## PICK
@@ -156,9 +162,33 @@ class PNP_env(gym.core.Env):
         done = True if reward == 0 else False
         info = {"is_success": done}
         return state, reward, done, info
+    
+    def act(self, action, control_method = "end"):
+        grip = (action[6]+1)/2*0.085 # normalization
+        base_pos, _ = p.getBasePositionAndOrientation(self.robot.id)
+        absolute_pos = action[:6]
+        absolute_pos[:3] += np.array(base_pos)
+        # absolute_pos[3:6] = (absolute_pos[3:6] + 1/2)*np.pi
+        absolute_pos[3] = (absolute_pos[3] + 1/2)*np.pi
+        absolute_pos[4] = (absolute_pos[4] + 1/2)*np.pi
+        absolute_pos[5] = (absolute_pos[5] + 1/2)*np.pi
+
+        # self.robot.move_ee(absolute_pos, control_method)
+        self.robot.move_ee(absolute_pos, control_method)
+        self.robot.move_gripper(action[-1])
 
     def get_state(self):
-        pass
+        # Robot State
+        joint_position, joint_velocity, ee_pos = self.robot.get_joint_obs()
+        obs = joint_position + joint_velocity + ee_pos
+
+        # Achieved Goal
+        achieved_goal = self.get_ycb_obs()[:2]
+
+        # Desired Goal
+        desired_goal = self.goal
+        ag = np.array(achieved_goal[:2])
+
 
     def get_observation(self):
         obs = dict()
@@ -173,7 +203,7 @@ class PNP_env(gym.core.Env):
 
     def get_ycb_obs(self):
         pos, ori = p.getBasePositionAndOrientation(self.ycb)
-        return pos, ori
+        return pos
     
     def get_robot_obs(self):
         # joint position: 12

@@ -1,6 +1,7 @@
 import pybullet as p
 import math
 from collections import namedtuple
+import numpy as np
 
 
 class RobotBase(object):
@@ -185,3 +186,30 @@ class UR5Robotiq85(RobotBase):
         # Control the mimic gripper joint(s)
         p.setJointMotorControl2(self.id, self.mimic_parent_id, p.POSITION_CONTROL, targetPosition=open_angle,
                                 force=self.joints[self.mimic_parent_id].maxForce, maxVelocity=self.joints[self.mimic_parent_id].maxVelocity)
+
+    def get_link_index_by_name(self, link_name):
+        num_joints = p.getNumJoints(self.id)
+        for i in range(num_joints):
+            joint_info = p.getJointInfo(self.id, i)
+            if joint_info[12].decode('utf-8') == link_name:
+                return i
+        return None
+    
+    def get_gripper_link_positions(self, gripper_link_names):
+        # Find the link indices for the gripper links
+        gripper_link_indices = [self.get_link_index_by_name(link_name) for link_name in gripper_link_names]
+
+        # Get the positions of the gripper links
+        gripper_link_positions = [p.getLinkState(self.id, link_index)[0] for link_index in gripper_link_indices]
+
+        return gripper_link_positions
+    
+    def get_gripper_open_length(self, gripper_link_names = ['left_inner_finger_joint', 'right_inner_finger_joint']):
+        gripper_link_positions = self.get_gripper_link_positions(gripper_link_names)
+
+        # Calculate the distance between the two gripper link positions
+        gripper_position_1 = np.array(gripper_link_positions[0])
+        gripper_position_2 = np.array(gripper_link_positions[1])
+        open_length = np.linalg.norm(gripper_position_1 - gripper_position_2)
+
+        return open_length
